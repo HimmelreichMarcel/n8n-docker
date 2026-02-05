@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cmd="${1:-}"
+shift || true
+
+die() { echo "❌ $*" >&2; exit 1; }
+
+require_repo_root() {
+  if [[ ! -f "docker-compose.yml" ]]; then
+    die "Run this from the repo folder (where docker-compose.yml is)."
+  fi
+}
+
+compose() {
+  docker compose "$@"
+}
+
+case "$cmd" in
+  up)
+    require_repo_root
+    echo "▶ Starting n8n..."
+    compose up -d
+    echo "✅ Done. Open: http://<pi-ip>:${N8N_PORT:-5678}"
+    ;;
+  down)
+    require_repo_root
+    echo "⏹ Stopping n8n..."
+    compose down
+    echo "✅ Stopped."
+    ;;
+  restart)
+    require_repo_root
+    echo "♻ Restarting n8n..."
+    compose down
+    compose up -d
+    echo "✅ Restarted."
+    ;;
+  ps)
+    require_repo_root
+    compose ps
+    ;;
+  logs)
+    require_repo_root
+    compose logs -f --tail=200
+    ;;
+  update)
+    require_repo_root
+    echo "⬇ Pulling latest images..."
+    compose pull
+    echo "▶ Recreating containers..."
+    compose up -d
+    echo "✅ Updated."
+    ;;
+  backup)
+    require_repo_root
+    ./bin/backup.sh
+    ;;
+  restore)
+    require_repo_root
+    [[ "${1:-}" != "" ]] || die "Usage: ./bin/n8n restore backups/<file>.tgz"
+    ./bin/restore.sh "$1"
+    ;;
+  help|"")
+    cat <<'EOF'
+n8n helper script
+
+Usage:
+  ./bin/n8n up        # start
+  ./bin/n8n down      # stop
+  ./bin/n8n ps        # status
+  ./bin/n8n logs      # logs (follow)
+  ./bin/n8n restart   # restart
+  ./bin/n8n update    # pull + restart
+  ./bin/n8n backup    # create backup tgz
+  ./bin/n8n restore <backup.tgz>  # restore
+
+Tip:
+  Run from the repo root (where docker-compose.yml is).
+EOF
+    ;;
+  *)
+    die "Unknown command: $cmd (try: ./bin/n8n help)"
+    ;;
+esac
